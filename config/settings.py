@@ -12,8 +12,19 @@ ASSETS_DIR = BASE_DIR / "assets"
 # Ensure models directory exists
 MODELS_DIR.mkdir(exist_ok=True)
 
+# Custom trained model path
+CUSTOM_BALL_MODEL = BASE_DIR / "runs" / "detect" / "my_ball" / "weights" / "best.pt"
+
 # Available YOLO models with metadata
 AVAILABLE_MODELS = {
+    "Custom Ball (Trained)": {
+        "file": str(CUSTOM_BALL_MODEL),
+        "size": "18 MB",
+        "speed": "Fastest",
+        "map": "Custom",
+        "description": "Your trained basketball detector",
+        "is_custom": True
+    },
     "YOLOv8n (Nano)": {
         "file": "yolov8n.pt",
         "size": "6 MB",

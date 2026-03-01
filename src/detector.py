@@ -33,15 +33,24 @@ class YOLODetector:
         Load YOLO model with caching.
 
         Args:
-            model_file: Name of the model file
+            model_file: Name of the model file or absolute path for custom models
 
         Returns:
             Loaded YOLO model
         """
         try:
-            model_path = MODELS_DIR / model_file
+            # Check if it's an absolute path (custom model) or relative (standard model)
+            model_path = Path(model_file)
+            if not model_path.is_absolute():
+                model_path = MODELS_DIR / model_file
 
-            # Model will auto-download if not exists
+            # Check if custom model exists
+            if not model_path.exists() and "runs" in str(model_file):
+                st.error(f"Custom model not found at: {model_path}")
+                st.info("Train your model first with: python train_my_ball.py")
+                raise FileNotFoundError(f"Model not found: {model_path}")
+
+            # Model will auto-download if not exists (for standard models)
             model = YOLO(str(model_path))
 
             return model

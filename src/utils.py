@@ -196,3 +196,87 @@ def add_fps_overlay(frame: np.ndarray, fps: float) -> np.ndarray:
     )
 
     return annotated
+
+
+def draw_zones(frame: np.ndarray, zone_manager) -> np.ndarray:
+    """
+    Draw detection zones on the frame.
+
+    Args:
+        frame: Input frame
+        zone_manager: ZoneManager instance with zones
+
+    Returns:
+        Frame with zones drawn
+    """
+    annotated = frame.copy()
+
+    for zone_name, (x1, y1, x2, y2) in zone_manager.zones.items():
+        # Get zone color
+        color = zone_manager.get_zone_color(zone_name)
+
+        # Draw zone rectangle
+        cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
+
+        # Draw zone label
+        cv2.putText(
+            annotated,
+            zone_name,
+            (x1 + 5, y1 + 25),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            color,
+            2,
+            cv2.LINE_AA
+        )
+
+    return annotated
+
+
+def add_score_overlay(frame: np.ndarray, score: int) -> np.ndarray:
+    """
+    Add score counter overlay to frame.
+
+    Args:
+        frame: Input frame
+        score: Current score
+
+    Returns:
+        Frame with score overlay
+    """
+    annotated = frame.copy()
+    height, width = frame.shape[:2]
+
+    # Score text
+    score_text = f"SCORE: {score}"
+
+    # Position at top-left corner
+    (text_width, text_height), baseline = cv2.getTextSize(
+        score_text, cv2.FONT_HERSHEY_SIMPLEX, 1.2, 3
+    )
+
+    x = 10
+    y = text_height + 10
+
+    # Draw background
+    cv2.rectangle(
+        annotated,
+        (x - 5, y - text_height - 5),
+        (x + text_width + 10, y + baseline + 10),
+        (0, 0, 0),
+        -1
+    )
+
+    # Draw text
+    cv2.putText(
+        annotated,
+        score_text,
+        (x, y),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        1.2,
+        (0, 255, 0),
+        3,
+        cv2.LINE_AA
+    )
+
+    return annotated
