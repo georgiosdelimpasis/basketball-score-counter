@@ -20,6 +20,7 @@ class ZoneManager:
         self.score_3pt = 0
         self.total_score = 0
         self.shot_origin_y = 0  # To track where the shot came from
+        self.ball_history: List[Tuple[int, int]] = []  # Track ball positions for velocity
         self.load_zones()
 
     def save_zones(self):
@@ -95,20 +96,66 @@ class ZoneManager:
             return False
 
         cx, cy = ball_detection
+
+        # Track ball position history (keep last 7 positions)
+        self.ball_history.append((cx, cy))
+        if len(self.ball_history) > 7:
+            self.ball_history.pop(0)
+
         in_zone1 = self.point_in_zone(cx, cy, 'Zone 1')
         in_zone2 = self.point_in_zone(cx, cy, 'Zone 2')
 
-        # Scoring logic: Zone 1 -> Zone 2
+        # Scoring logic: Zone 1 -> Zone 2 (with velocity check)
         if in_zone1 and not self.passed_zone1 and self.cooldown == 0:
             self.passed_zone1 = True
             return False
 
         if in_zone2 and self.passed_zone1 and self.cooldown == 0:
-            self.passed_zone1 = False
-            self.cooldown = 30  # 30 frames cooldown
-            return True
+            # Check ball velocity to distinguish real score from airball
+            is_moving_down = self._is_ball_moving_down()
+
+            if is_moving_down:
+                # Ball is falling through net - REAL SCORE!
+                self.passed_zone1 = False
+                self.cooldown = 30  # 30 frames cooldown
+                return True
+            else:
+                # Ball is moving upward or sideways - AIRBALL/RIM-OUT
+                # Reset state without scoring
+                self.passed_zone1 = False
+                self.ball_history.clear()  # Clear history for next shot
+                return False
 
         return False
+
+    def _is_ball_moving_down(self) -> bool:
+        """
+        Check if ball is moving downward (real score) or upward (airball).
+
+        Returns:
+            True if ball is moving downward, False otherwise
+        """
+        if len(self.ball_history) < 3:
+            # Not enough data, assume downward (allow score)
+            return True
+
+        # Calculate average vertical velocity over last few positions
+        # Positive velocity = moving down (cy increasing)
+        # Negative velocity = moving up (cy decreasing)
+
+        velocities = []
+        for i in range(len(self.ball_history) - 1):
+            prev_cy = self.ball_history[i][1]
+            curr_cy = self.ball_history[i + 1][1]
+            velocity = curr_cy - prev_cy  # Positive = downward
+            velocities.append(velocity)
+
+        # Average velocity over recent frames
+        avg_velocity = sum(velocities) / len(velocities)
+
+        # If average velocity is positive (downward) or near zero, it's a score
+        # Threshold: -2 pixels allows for slight upward drift at bottom of arc
+        return avg_velocity > -2
 
     def add_manual_score(self, points: int):
         """Add a manually confirmed score."""
@@ -127,6 +174,7 @@ class ZoneManager:
         self.total_score = 0
         self.passed_zone1 = False
         self.cooldown = 0
+        self.ball_history.clear()  # Clear velocity tracking
 
     def get_zone_color(self, zone_name: str) -> Tuple[int, int, int]:
         """Get color for a zone."""

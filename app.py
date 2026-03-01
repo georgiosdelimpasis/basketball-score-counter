@@ -5,6 +5,7 @@ Main Streamlit application for object detection using YOLOv8.
 import streamlit as st
 import time
 from src.detector import YOLODetector
+from src.motion_detector import MotionDetector
 from src.webcam import WebcamCapture
 from src.zones import ZoneManager
 from src.utils import (
@@ -17,6 +18,7 @@ from src.utils import (
 from ui.sidebar import render_sidebar
 from ui.styles import inject_custom_css
 from ui.zone_setup import render_zone_setup
+from config.settings import AVAILABLE_MODELS
 
 
 # Page configuration
@@ -82,7 +84,13 @@ def main():
     # Initialize or update detector if model changed
     if st.session_state.current_model != settings['model_name']:
         with st.spinner(f"Loading {settings['model_name']}..."):
-            st.session_state.detector = YOLODetector(settings['model_name'])
+            # Check if it's motion detection or YOLO
+            model_info = AVAILABLE_MODELS[settings['model_name']]
+            if model_info.get('is_motion', False):
+                st.session_state.detector = MotionDetector()
+                st.info("🎥 Motion Detection Mode: Detects moving circular objects (any color ball!)")
+            else:
+                st.session_state.detector = YOLODetector(settings['model_name'])
             st.session_state.current_model = settings['model_name']
             st.success(f"✅ {settings['model_name']} loaded successfully!")
 
@@ -147,7 +155,8 @@ def main():
         if st.session_state.webcam is None or not st.session_state.webcam.is_active:
             st.session_state.webcam = WebcamCapture(
                 camera_source=settings['camera_source'],
-                resolution=settings['resolution']
+                resolution=settings['resolution'],
+                streaming_mode=settings.get('streaming_mode', 'mjpeg')
             )
             if not st.session_state.webcam.start():
                 st.error("""
@@ -188,6 +197,7 @@ def main():
             
             st.markdown("---")
             stats_fps = st.empty()
+            stats_latency = st.empty()
             stats_conf = st.empty()
 
         status_placeholder = st.empty()
@@ -262,6 +272,12 @@ def main():
                 # Update Performance Stats
                 fps_color = "🟢" if fps >= 10 else "🟡" if fps >= 5 else "🔴"
                 stats_fps.metric("⚡ FPS", f"{fps_color} {fps:.1f}")
+
+                # Display latency with color coding
+                latency = st.session_state.webcam.latency_ms
+                latency_color = "🟢" if latency < 100 else "🟡" if latency < 200 else "🔴"
+                stats_latency.metric("📡 Latency", f"{latency_color} {latency:.0f}ms")
+
                 avg_conf = stats.get('avg_confidence', 0)
                 stats_conf.metric("🎯 Avg Confidence", f"{avg_conf:.1%}" if avg_conf > 0 else "N/A")
 
@@ -269,7 +285,7 @@ def main():
                 video_placeholder.image(
                     annotated_frame,
                     channels="BGR",
-                    use_column_width=True
+                    use_column_width=False
                 )
 
                 # Check if stop button was pressed
@@ -290,22 +306,7 @@ def main():
 
     else:
         # Webcam not active - show instructions
-        st.markdown("""
-        <div class="detection-box">
-            <h2>🏀 Welcome to Basketball Detection!</h2>
-            <p>To get started:</p>
-            <ol>
-                <li>Select <strong>Custom Ball (Trained)</strong> model from sidebar</li>
-                <li>Choose Stream 2 (Fast) for real-time detection</li>
-                <li>Click <strong>▶️ Start</strong> to begin detection</li>
-                <li>Click <strong>⚙️ Setup Detection Zones</strong> to configure scoring zones</li>
-                <li>Draw Zone 1 (above hoop) and Zone 2 (below hoop)</li>
-                <li>Start shooting baskets - automatic score tracking!</li>
-            </ol>
-            <br>
-            <p><strong>💡 Tip:</strong> Lower confidence threshold to 0.20-0.25 for better ball detection.</p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.info("👈 Select a camera source from the sidebar and click **Start** to begin tracking!")
 
         # Cleanup webcam if it exists
         if st.session_state.webcam is not None:

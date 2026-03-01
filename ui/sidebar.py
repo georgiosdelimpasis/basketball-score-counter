@@ -6,8 +6,10 @@ import streamlit as st
 from config.settings import (
     AVAILABLE_MODELS,
     DEFAULT_CONF_THRESHOLD,
-    DEFAULT_IOU_THRESHOLD
+    DEFAULT_IOU_THRESHOLD,
+    IP_CAMERA_RESOLUTIONS
 )
+from src.ip_camera_discovery import IPCameraDiscovery, CameraDevice
 
 
 def render_sidebar():
@@ -49,27 +51,161 @@ def render_sidebar():
         st.divider()
 
         # Camera Source Selection
-        st.markdown("### 📹 Tapo Camera")
+        st.markdown("### 📹 Camera Source")
 
-        # Camera presets
-        camera_presets = {
+        # Initialize camera discovery in session state
+        if 'camera_discovery' not in st.session_state:
+            st.session_state.camera_discovery = IPCameraDiscovery()
+            st.session_state.discovered_cameras = []
+            st.session_state.scanning = False
+
+        # Static camera presets (for RTSP cameras and fallback)
+        static_presets = {
+            "IP Webcam (Phone)": "http://192.168.1.136:8080/video",
+            "Phone Camera (OBS USB)": 2,
             "Stream 2 (Fast)": "rtsp://georgedelimpasis:v!nmWiQs3Bs@192.168.1.163:554/stream2",
             "Stream 1 (High Quality)": "rtsp://georgedelimpasis:v!nmWiQs3Bs@192.168.1.163:554/stream1",
         }
 
-        # Preset selection
-        selected_preset = st.selectbox(
-            "Stream Quality",
-            options=list(camera_presets.keys()),
-            index=0,  # Default to "Stream 2 (Fast)"
-            help="Stream 2 is faster for real-time detection, Stream 1 is higher quality"
-        )
+        # Network scan button
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.markdown("**IP Camera Discovery**")
+        with col2:
+            if st.button("🔍 Scan", use_container_width=True, disabled=st.session_state.scanning):
+                st.session_state.scanning = True
+                with st.spinner("Scanning network..."):
+                    st.session_state.discovered_cameras = st.session_state.camera_discovery.scan_network()
+                st.session_state.scanning = False
+                st.rerun()
 
-        camera_source = camera_presets[selected_preset]
-        camera_type = "IP Camera (RTSP)"
-        resolution = "640p"  # Resolution from RTSP stream
+        # Build camera options dictionary
+        camera_options = {}
 
-        st.success(f"✅ {selected_preset}")
+        # Add discovered IP cameras first
+        if st.session_state.discovered_cameras:
+            for camera in st.session_state.discovered_cameras:
+                camera_options[f"📱 {camera.name}"] = ('discovered', camera)
+
+        # Add static presets
+        for name, source in static_presets.items():
+            camera_options[name] = ('static', source)
+
+        # Add manual entry option
+        camera_options["✏️ Manual IP Entry"] = ('manual', None)
+
+        # Camera selection
+        if camera_options:
+            selected_camera_name = st.selectbox(
+                "Select Camera",
+                options=list(camera_options.keys()),
+                help="Discovered IP Webcam devices and saved presets"
+            )
+
+            camera_type, camera_data = camera_options[selected_camera_name]
+
+            # Handle different camera types
+            if camera_type == 'discovered':
+                # Discovered IP camera
+                camera_device: CameraDevice = camera_data
+
+                # Resolution selection
+                ip_resolution = st.select_slider(
+                    "IP Camera Resolution",
+                    options=list(IP_CAMERA_RESOLUTIONS.keys()),
+                    value="480p",
+                    help="Lower resolution = higher FPS and lower latency"
+                )
+
+                # Build camera URL (always use MJPEG)
+                resolution_param = IP_CAMERA_RESOLUTIONS[ip_resolution]
+                camera_source = camera_device.get_url('mjpeg', resolution_param)
+                streaming_mode_value = 'mjpeg'
+                resolution = "640p"  # For internal processing
+
+                st.success(f"✅ {camera_device.name} (MJPEG)")
+
+            elif camera_type == 'manual':
+                # Manual IP entry
+                st.markdown("**Manual Configuration**")
+                manual_ip = st.text_input("IP Address", "192.168.1.136", help="IP address of your IP Webcam device")
+                manual_port = st.number_input("Port", value=8080, min_value=1, max_value=65535)
+
+                # Resolution selection
+                ip_resolution = st.select_slider(
+                    "IP Camera Resolution",
+                    options=list(IP_CAMERA_RESOLUTIONS.keys()),
+                    value="480p",
+                    help="Lower resolution = higher FPS"
+                )
+
+                # Build URL (always MJPEG)
+                resolution_param = IP_CAMERA_RESOLUTIONS[ip_resolution]
+                camera_source = f"http://{manual_ip}:{manual_port}/video?{resolution_param}"
+                streaming_mode_value = 'mjpeg'
+                resolution = "640p"
+
+                st.info(f"📡 Using: {camera_source}")
+
+            else:
+                # Static preset (RTSP or local camera)
+                camera_source = camera_data
+                streaming_mode_value = 'mjpeg'  # RTSP uses standard mode
+                resolution = "640p"
+
+                st.success(f"✅ {selected_camera_name}")
+
+        else:
+            # Fallback
+            camera_source = 2
+            streaming_mode_value = 'mjpeg'
+            resolution = "640p"
+
+        # Start/Stop Controls
+        st.markdown("")  # Small spacing
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("▶️ Start", use_container_width=True, disabled=st.session_state.get('webcam_active', False)):
+                st.session_state.webcam_active = True
+                st.rerun()
+        with col2:
+            if st.button("⏹️ Stop", use_container_width=True, disabled=not st.session_state.get('webcam_active', False)):
+                st.session_state.webcam_active = False
+                st.rerun()
+
+        # Connection status (if active)
+        if st.session_state.get('webcam_active') and st.session_state.get('webcam'):
+            webcam = st.session_state.webcam
+            fps = webcam.get_current_fps()
+            latency = webcam.latency_ms
+
+            # Color-coded status based on performance
+            if fps >= 20:
+                st.success(f"🟢 Connected: {fps:.1f} FPS | {latency:.0f}ms latency")
+            elif fps >= 10:
+                st.warning(f"🟡 Connected: {fps:.1f} FPS | {latency:.0f}ms latency")
+            else:
+                st.error(f"🔴 Slow: {fps:.1f} FPS | {latency:.0f}ms latency")
+
+        # Advanced settings expander
+        with st.expander("⚙️ Advanced Settings & Tips"):
+            st.markdown("**Performance Optimization**")
+            st.markdown("""
+            - **480p resolution**: Best balance for ball detection
+            - **5GHz WiFi**: Faster than 2.4GHz
+            - **Same subnet**: Phone and computer on same network
+            - **Close apps**: Free up phone resources
+            - **Lower quality**: 50-60% in IP Webcam app settings
+            """)
+
+            st.markdown("**IP Webcam App Settings**")
+            st.markdown("""
+            - Video resolution: 854×480 (480p)
+            - Quality: 50-60%
+            - FPS limit: 30
+            - Enable: "Prevent phone from sleeping"
+            - Disable: Audio (not needed)
+            """)
 
         st.divider()
 
@@ -135,28 +271,6 @@ def render_sidebar():
 
         st.divider()
 
-        # Webcam Controls
-        st.markdown("### 🎮 Controls")
-
-        # Initialize webcam state
-        if 'webcam_active' not in st.session_state:
-            st.session_state.webcam_active = False
-
-        # Start/Stop buttons
-        col1, col2 = st.columns(2)
-
-        with col1:
-            if st.button("▶️ Start", use_container_width=True, disabled=st.session_state.webcam_active):
-                st.session_state.webcam_active = True
-                st.rerun()
-
-        with col2:
-            if st.button("⏹️ Stop", use_container_width=True, disabled=not st.session_state.webcam_active):
-                st.session_state.webcam_active = False
-                st.rerun()
-
-        st.divider()
-
         # Information
         st.markdown("### 💡 Pro Tips")
         st.markdown("""
@@ -178,6 +292,6 @@ def render_sidebar():
         'image_size': image_size,
         'resolution': resolution,
         'camera_source': camera_source,
-        'camera_type': camera_type,
+        'streaming_mode': streaming_mode_value,
         'webcam_active': st.session_state.webcam_active
     }

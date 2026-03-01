@@ -12,53 +12,43 @@ ASSETS_DIR = BASE_DIR / "assets"
 # Ensure models directory exists
 MODELS_DIR.mkdir(exist_ok=True)
 
-# Custom trained model path
-CUSTOM_BALL_MODEL = BASE_DIR / "runs" / "detect" / "my_ball" / "weights" / "best.pt"
-
 # Available YOLO models with metadata
 AVAILABLE_MODELS = {
-    "Custom Ball (Trained)": {
-        "file": str(CUSTOM_BALL_MODEL),
-        "size": "18 MB",
-        "speed": "Fastest",
-        "map": "Custom",
-        "description": "Your trained basketball detector",
-        "is_custom": True
+    "Motion Detection (No Training)": {
+        "file": "motion",  # Special flag for motion detector
+        "size": "~1 KB",
+        "speed": "Very Fast",
+        "map": "N/A",
+        "description": "Detects moving circular objects only (any color ball!)",
+        "is_motion": True
     },
-    "YOLOv8n (Nano)": {
-        "file": "yolov8n.pt",
-        "size": "6 MB",
+    "YOLO11n (Nano)": {
+        "file": "yolo11n.pt",
+        "size": "5.3 MB",
         "speed": "Fastest",
-        "map": "37.3",
-        "description": "Best for real-time webcam (10+ FPS)"
+        "map": "39.5",
+        "description": "Newest generation (11). Extreme speed with improved accuracy."
     },
-    "YOLOv8s (Small)": {
-        "file": "yolov8s.pt",
-        "size": "22 MB",
+    "YOLO11s (Small)": {
+        "file": "yolo11s.pt",
+        "size": "18.2 MB",
         "speed": "Fast",
-        "map": "44.9",
-        "description": "Good balance of speed and accuracy"
+        "map": "47.0",
+        "description": "Newest generation (11). More accurate for small/far basketballs."
     },
-    "YOLOv8m (Medium)": {
-        "file": "yolov8m.pt",
-        "size": "50 MB",
+    "YOLO11m (Medium)": {
+        "file": "yolo11m.pt",
+        "size": "40.3 MB",
         "speed": "Moderate",
-        "map": "50.2",
-        "description": "Higher accuracy, slower processing"
+        "map": "51.5",
+        "description": "High accuracy, but may reduce your camera's FPS."
     },
-    "YOLOv8l (Large)": {
-        "file": "yolov8l.pt",
-        "size": "84 MB",
+    "YOLO11l (Large)": {
+        "file": "yolo11l.pt",
+        "size": "50.1 MB",
         "speed": "Slow",
-        "map": "52.9",
-        "description": "Production quality detection"
-    },
-    "YOLOv8x (XLarge)": {
-        "file": "yolov8x.pt",
-        "size": "131 MB",
-        "speed": "Slowest",
-        "map": "53.9",
-        "description": "Maximum accuracy, lowest FPS"
+        "map": "53.4",
+        "description": "Maximum accuracy. Best for pre-recorded videos, not real-time."
     }
 }
 
@@ -75,6 +65,22 @@ WEBCAM_RESOLUTIONS = {
 }
 DEFAULT_RESOLUTION = "640p"
 TARGET_FPS = 30
+
+# IP Camera settings
+IP_WEBCAM_PORT = 8080
+IP_WEBCAM_ENDPOINTS = {
+    'mjpeg': '/video',
+    'snapshot': '/shot.jpg',
+    'status': '/status.json'
+}
+IP_CAMERA_RESOLUTIONS = {
+    "360p": "640x360",
+    "480p": "854x480",
+    "640p": "1024x640",
+    "720p": "1280x720"
+}
+NETWORK_SCAN_TIMEOUT = 2  # seconds
+MAX_SCAN_WORKERS = 50  # concurrent IP probes
 
 # UI constants
 MAX_FILE_SIZE_MB = 200
