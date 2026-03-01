@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# YOLO Models & Training
+models/*.pt
+!models/.gitkeep
+runs/
+*.pt
+my_ball_dataset/
+roboflow_images/
+ball_dataset/
+
+# API keys (sensitive)
+roboflow_config.py
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Streamlit
+.streamlit/secrets.toml
+.streamlit/config.toml
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
+
+# Cache
+.cache/
+*.pyc
