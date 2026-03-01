@@ -121,8 +121,12 @@ def render_sidebar():
                 # Show score if zones are set up
                 if 'Zone 1' in st.session_state.zone_manager.zones and \
                    'Zone 2' in st.session_state.zone_manager.zones:
-                    score = st.session_state.zone_manager.score
-                    st.metric("🏀 Score", score)
+                    score = st.session_state.zone_manager.total_score
+                    st.metric("🎯 Total Score", score)
+
+                    # Show a tiny breakdown in the sidebar as well
+                    st.markdown(f"<span style='font-size: 0.8rem; color: #666;'>2PT: {st.session_state.zone_manager.score_2pt} | 3PT: {st.session_state.zone_manager.score_3pt}</span>", unsafe_allow_html=True)
+
                     if st.button("🔄 Reset Score", use_container_width=True):
                         st.session_state.zone_manager.reset_score()
                         st.rerun()

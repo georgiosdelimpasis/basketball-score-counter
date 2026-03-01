@@ -16,7 +16,10 @@ class ZoneManager:
         self.zones: Dict[str, Tuple[int, int, int, int]] = {}
         self.passed_zone1 = False
         self.cooldown = 0
-        self.score = 0
+        self.score_2pt = 0
+        self.score_3pt = 0
+        self.total_score = 0
+        self.shot_origin_y = 0  # To track where the shot came from
         self.load_zones()
 
     def save_zones(self):
@@ -101,16 +104,27 @@ class ZoneManager:
             return False
 
         if in_zone2 and self.passed_zone1 and self.cooldown == 0:
-            self.score += 1
             self.passed_zone1 = False
             self.cooldown = 30  # 30 frames cooldown
             return True
 
         return False
 
+    def add_manual_score(self, points: int):
+        """Add a manually confirmed score."""
+        if points == 3:
+            self.score_3pt += 1
+            self.total_score += 3
+        elif points == 2:
+            self.score_2pt += 1
+            self.total_score += 2
+        # If points == 0, it means the user cancelled the score, nothing to add
+
     def reset_score(self):
         """Reset the score counter."""
-        self.score = 0
+        self.score_2pt = 0
+        self.score_3pt = 0
+        self.total_score = 0
         self.passed_zone1 = False
         self.cooldown = 0
 

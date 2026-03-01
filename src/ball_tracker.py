@@ -20,7 +20,9 @@ class BasketballTracker:
         self.max_history = max_history
         self.position_history = deque(maxlen=max_history)
         self.hoop_zone = None  # (x1, y1, x2, y2)
-        self.score = 0
+        self.score_2pt = 0
+        self.score_3pt = 0
+        self.total_score = 0
         self.last_state = None  # 'above', 'in', 'below', None
         self.scoring_cooldown = 0  # Prevent double counting
 
@@ -115,12 +117,40 @@ class BasketballTracker:
 
                     # If we have above → in → below sequence, it's a score!
                     if 'above' in recent_states:
-                        self.score += 1
+                        
+                        # Find the release point (the earliest point in the upward trajectory)
+                        # We'll just look at the first recorded point in the current history buffer
+                        # as a simple approximation of where the shot started
+                        release_point = self.position_history[0] if len(self.position_history) > 0 else (cx, cy)
+                        rx, ry = release_point
+                        
+                        # Determine if it's a 2-pointer or 3-pointer based on the zones in zone_settings.json
+                        # If we have kwargs passed in from the UI, we can check them. For now, we'll
+                        # just rely on the UI to pass us the zones dictionary.
+                        points_awarded = 2 # Default
+                        
+                        if hasattr(self, 'zones') and self.zones:
+                            for zone_name, (zx1, zy1, zx2, zy2) in self.zones.items():
+                                if zx1 <= rx <= zx2 and zy1 <= ry <= zy2:
+                                    if "3" in zone_name or "Zone 2" in zone_name:
+                                        points_awarded = 3
+                                    else:
+                                        points_awarded = 2
+                                    break # Found the zone
+                                    
+                        if points_awarded == 3:
+                            self.score_3pt += 1
+                            self.total_score += 3
+                        else:
+                            self.score_2pt += 1
+                            self.total_score += 2
+                            
                         scored = True
                         self.scoring_cooldown = 30  # 1 second cooldown at 30 FPS
 
         self.last_state = current_state
-        return scored
+        # Return both the boolean and the points awarded so the UI can flash "3 POINTER!"
+        return scored, points_awarded if scored else 0
 
     def get_trajectory_line(self, num_points: int = 10) -> List[Tuple[int, int]]:
         """Get recent trajectory points for visualization."""
@@ -130,7 +160,13 @@ class BasketballTracker:
 
     def reset_score(self):
         """Reset the score counter."""
-        self.score = 0
+        self.score_2pt = 0
+        self.score_3pt = 0
+        self.total_score = 0
         self.position_history.clear()
         self.last_state = None
         self.scoring_cooldown = 0
+        
+    def set_zones(self, zones: Dict):
+        """Set the scoring zones (2-point and 3-point areas)."""
+        self.zones = zones

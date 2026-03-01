@@ -60,6 +60,9 @@ def initialize_session_state():
     if 'setup_zones' not in st.session_state:
         st.session_state.setup_zones = False
 
+    if 'unconfirmed_scores' not in st.session_state:
+        st.session_state.unconfirmed_scores = 0
+
 
 def main():
     """Main application function."""
@@ -112,6 +115,27 @@ def main():
 
     st.divider()
 
+    # Manual Score Confirmation UI
+    if st.session_state.unconfirmed_scores > 0:
+        st.warning(f"🎉 **SCORE DETECTED!** ({st.session_state.unconfirmed_scores} pending) Please confirm point value:", icon="🏀")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.button("✌️ 2 Points", use_container_width=True, type="primary"):
+                st.session_state.zone_manager.add_manual_score(2)
+                st.session_state.unconfirmed_scores -= 1
+                st.rerun()
+        with col2:
+            if st.button("🔥 3 Points", use_container_width=True, type="primary"):
+                st.session_state.zone_manager.add_manual_score(3)
+                st.session_state.unconfirmed_scores -= 1
+                st.rerun()
+        with col3:
+            if st.button("❌ Cancel (Miss)", use_container_width=True):
+                st.session_state.unconfirmed_scores -= 1
+                st.rerun()
+        
+        st.divider()
+
     # Zone setup mode
     if st.session_state.setup_zones:
         render_zone_setup(st.session_state.webcam, st.session_state.zone_manager)
@@ -152,12 +176,19 @@ def main():
 
         with col2:
             st.markdown("### 📊 Live Statistics")
-            stats_person = st.empty()
-            stats_total = st.empty()
+            
+            # Show score breakdown
+            st.markdown("#### 🏀 Match Score")
+            score_total = st.empty()
+            score_breakdown = st.empty()
+            
+            if st.button("🔄 Reset Score"):
+                 st.session_state.zone_manager.reset_score()
+                 st.success("Score reset!")
+            
+            st.markdown("---")
             stats_fps = st.empty()
             stats_conf = st.empty()
-            st.markdown("---")
-            stats_classes = st.empty()
 
         status_placeholder = st.empty()
 
@@ -199,8 +230,8 @@ def main():
                    'Zone 2' in st.session_state.zone_manager.zones:
                     scored = st.session_state.zone_manager.check_scoring(detections)
                     if scored:
-                        # Show score notification
-                        st.balloons()
+                        st.session_state.unconfirmed_scores += 1
+                        st.rerun() # Interrupt video loop to ask user for score confirmation
 
                 # Calculate FPS (for stats display only)
                 frame_count += 1
@@ -212,29 +243,27 @@ def main():
                 st.session_state.current_stats = stats
 
                 # Update real-time statistics display
-                # Get primary class (most detected class)
-                class_counts = stats.get('class_counts', {})
-                primary_class = max(class_counts.items(), key=lambda x: x[1]) if class_counts else ('person', 0)
-                primary_icon = "👥" if primary_class[0] == 'person' else "🏀" if primary_class[0] == 'ball' else "📦"
-                stats_person.metric(f"{primary_icon} {primary_class[0].title()}s Detected", primary_class[1], help=f"Number of {primary_class[0]}s currently visible")
-                stats_total.metric("📦 Total Objects", stats.get('total_objects', 0))
+                
+                # Update Score
+                score_total.metric("🎯 TOTAL SCORE", st.session_state.zone_manager.total_score)
+                score_breakdown.markdown(f"""
+                <div style='background-color: #f0f2f6; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e0e4eb;'>
+                    <div style='display: flex; justify-content: space-between; margin-bottom: 8px; color: #1e1e1e;'>
+                        <span style='font-size: 1.1em;'>✌️ 2-Pointers:</span> 
+                        <strong style='font-size: 1.1em;'>{st.session_state.zone_manager.score_2pt} &times; 2 = <span style='color: #0068c9;'>{st.session_state.zone_manager.score_2pt * 2}</span></strong>
+                    </div>
+                    <div style='display: flex; justify-content: space-between; color: #1e1e1e;'>
+                        <span style='font-size: 1.1em;'>🔥 3-Pointers:</span> 
+                        <strong style='font-size: 1.1em;'>{st.session_state.zone_manager.score_3pt} &times; 3 = <span style='color: #ff2b2b;'>{st.session_state.zone_manager.score_3pt * 3}</span></strong>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Update Performance Stats
                 fps_color = "🟢" if fps >= 10 else "🟡" if fps >= 5 else "🔴"
                 stats_fps.metric("⚡ FPS", f"{fps_color} {fps:.1f}")
                 avg_conf = stats.get('avg_confidence', 0)
                 stats_conf.metric("🎯 Avg Confidence", f"{avg_conf:.1%}" if avg_conf > 0 else "N/A")
-
-                # Update class breakdown
-                class_counts = stats.get('class_counts', {})
-                if class_counts:
-                    class_text = "**Detected Classes:**\n\n"
-                    # Add emoji based on class
-                    emoji_map = {'person': '👤', 'ball': '🏀', 'car': '🚗', 'cat': '🐱', 'dog': '🐶'}
-                    for class_name, count in sorted(class_counts.items(), key=lambda x: x[1], reverse=True):
-                        emoji = emoji_map.get(class_name, '•')
-                        class_text += f"{emoji} **{class_name.title()}: {count}**\n\n"
-                    stats_classes.markdown(class_text)
-                else:
-                    stats_classes.info("Waiting for detections...")
 
                 # Display frame
                 video_placeholder.image(
